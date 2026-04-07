@@ -1,0 +1,14 @@
+.bakes/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+.env
+.env.local
+*.db
+.DS_Store
+.idea/
+.vscode/

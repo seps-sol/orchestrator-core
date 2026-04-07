@@ -1,0 +1,30 @@
+name: Orchestrator tick
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/10 * * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.8.5"
+
+      - name: Sync and run one cycle
+        env:
+          GITHUB_TOKEN: ${{ secrets.SEPS_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_ORG: seps-sol
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          uv sync
+          uv run seps once

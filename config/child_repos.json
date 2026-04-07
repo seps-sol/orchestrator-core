@@ -1,0 +1,18 @@
+[
+  {
+    "name": "protocol-core",
+    "role": "Anchor program, IDL, on-chain protocol logic"
+  },
+  {
+    "name": "tests-suite",
+    "role": "Unit and integration tests, CI for protocol-core"
+  },
+  {
+    "name": "deploy-agent",
+    "role": "Solana CLI deploy, testnet verification"
+  },
+  {
+    "name": "feedback-loop",
+    "role": "Bug logging, prompt refinement, self-improvement signals"
+  }
+]
