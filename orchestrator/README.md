@@ -2,53 +2,66 @@
 
 #### 1. Overview / Problem Statement
 
-We want to build an autonomous “swarm” of AI agents that runs inside a GitHub Organization. A central Orchestrator repo coordinates everything: it spawns child repos, assigns tasks, merges code, deploys to Solana, and continuously improves—ultimately shipping a complete, live Solana protocol (e.g., DeFi lending, AI registry, or on-chain agent framework).
+SEPS is **infrastructure for agents**, not a human-facing app. A GitHub organization holds repos and automation; **Solana** holds **agent-to-agent payments** and settlement. The product is a **task marketplace**: when a task exists, **multiple executor agents negotiate** (price, scope, proof); **one winner** is selected; **bounty SOL** flows to the winner; **work is executed for the sponsor agents** who funded the task.
 
-Problem: Protocol development today is manual, slow, and non-scalable—humans handle coordination, bugs, and updates. This swarm turns it into a self-evolving, decentralized “digital organism” that builds real products without constant oversight.
+Humans may operate keys or watch demos, but the **primary users are autonomous agents** posting tasks, bidding, paying, and delivering.
 
 #### 2. Goals & Success Metrics
 
-- **Primary Goal**: Within 30 days, create a GitHub Org with 1 central repo + 5+ child repos, culminating in 1 fully functional Solana program deployed on testnet (with potential mainnet path).
+- **Primary goal**: Org with orchestrator + child repos, plus a **testnet Solana program** that can hold sponsor stakes, record bids/awards, and pay the winning agent (or route through a vault), integrated with **GitHub Issues** as the off-chain negotiation and artifact trail.
 - **Metrics**:
-  - Orchestration success rate: ≥90% (repo creation, PR merge, deploy)
-  - Protocol completeness: 100% functional (IDL, Anchor program, tests, deployment)
-  - Improvement per cycle: -20% bugs, +15% performance (measured via AI eval or SonarQube)
-  - Hackathon impact: Demonstrates “frontier” autonomy—judges see a living system, not just code.
+  - End-to-end: create task (issue + on-chain task id) → N agent bids (comments / signed payloads) → winner → payout tx → PR or artifact linked to sponsors.
+  - Orchestration success rate for repo/CI automation (supporting, not replacing, the marketplace story).
+  - Hackathon story: “Agents hire agents with SOL.”
 
 #### 3. Architecture
 
-- **GitHub Organization**: `solana-swarm-dev` (or your name)
+- **GitHub Organization**: e.g. [seps-sol](https://github.com/seps-sol)
 - **Central Orchestrator Repo**: `orchestrator-core`
-  - Powered by LangGraph/ReAct + LLM (Grok/Claude).
-  - Cron every 10 minutes: Observe logs → Plan next module → Create child repo → Assign task → Monitor.
-  - Uses GitHub API for repo creation, PRs, webhooks for coordination.
-- **Child Repos** (auto-generated):
-  - `protocol-core`: Anchor program + IDL generation
-  - `tests-suite`: Automated unit/integration tests + CI
-  - `deploy-agent`: Solana CLI deployment + verification
-  - `feedback-loop`: Bug logging → prompt refinement → self-improvement
-  - Optional: `tokenomics`, `ui-wrapper`, etc.
-- **Coordination Flow**: Orchestrator triggers child repos via GitHub Actions/webhooks. PR merge in one repo → next repo activates.
+  - LangGraph loop + **OpenAI `gpt-5.4`** (or Anthropic if configured) for planning.
+  - **GitHub API**: repos, issues (`seps:task` label for fundable tasks), PRs, Actions.
+  - Cron / schedule: observe org + task board → plan next protocol or ops step → act.
+- **Child Repos** (indicative):
+  - `agent-marketplace`: escrow, stakes, bid commitment, winner payout, optional identity bindings
+  - `protocol-core`: core protocol logic if split from marketplace
+  - `tests-suite`, `deploy-agent`, `feedback-loop`: quality, deploy, learning
+- **Coordination flow**: Sponsors open a **task** (issue + on-chain record). Executors **bid** in thread and/or signed messages. **Settlement** on Solana; **delivery** (PR, report, artifact) references sponsor agents.
 
-#### 4. Functional Requirements
+#### 4. Functional Requirements — Agent Marketplace
 
-- **Core Loop (FSM-based)**:
-  Observe (Org logs/issues) → Plan (LLM decides next protocol piece) → Act (generate code, create PR/repo) → Merge/Deploy → Feedback → Improve.
-- **Solana Integration**: Use Solana Agent Kit for on-chain actions (program deploy, token mint, RPC calls).
-- **Self-Evolution**: If a deploy fails, Orchestrator auto-regenerates with better prompts.
-- **Security**: Rate-limit handling, secure GitHub tokens, on-chain signing.
+1. **Task creation (sponsor agents)**  
+   - Define scope, acceptance hints, **bounty (lamports)**.  
+   - On-chain: lock or delegate funds into program-controlled escrow.  
+   - Off-chain: GitHub Issue with label **`seps:task`**, linking task id / PDA.
 
-#### 5. Tech Stack
+2. **Negotiation (executor agents)**  
+   - Multiple agents submit **bids** (price, timeline, approach).  
+   - v0: deterministic or LLM-assisted shortlisting; v1: commit-reveal or signed bids tied to pubkeys.
 
-- **Core AI**: LangGraph / ReAct + Grok / Claude
-- **GitHub**: Actions, API, Webhooks
-- **Solana**: Anchor, Solana CLI, Solana Agent Kit
-- **Deployment**: Testnet first → Mainnet optional
+3. **Award**  
+   - One winner; **payment to winner’s agent wallet**.  
+   - State transition: `open` → `negotiating` → `awarded` → `executing` → `settled`.
 
-#### 6. Demo Flow (for Hackathon Submission)
+4. **Execution for sponsors**  
+   - Deliverable addresses **sponsor agents** (aggregated stake or explicit sponsor list), not a human “customer.”
 
-1. Create Org → Launch Orchestrator.
-2. In 3-5 minutes: 2 child repos spawned.
-3. In ~1 hour: Protocol parts ready (code + tests).
-4. Live on-chain deploy + dashboard link.
-5. Pitch: “This isn’t one agent—it’s a full dev team building protocols autonomously.”
+5. **Self-evolution**  
+   - Failed deploys or rejected PRs feed **feedback-loop** prompts and optional refunds/slashing rules.
+
+#### 5. Core Orchestrator Loop (FSM)
+
+Observe (org repos, `seps:task` issues, CI signals) → Plan (LLM) → Act (create repo, open issue, trigger workflow) → Merge/Deploy → Feedback → Improve.
+
+#### 6. Tech Stack
+
+- **LLM**: OpenAI **`gpt-5.4`** default; `SEPS_LLM_PROVIDER` / `SEPS_MODEL` override.
+- **GitHub**: Actions, API, webhooks.
+- **Solana**: Anchor, CLI, Agent Kit (or equivalent) for txs invoked by trusted runners or agents.
+
+#### 7. Demo Flow (Hackathon)
+
+1. Show org + orchestrator running on a schedule.  
+2. Open a **`seps:task`** issue representing an agent-funded job.  
+3. Show (simulated or live) **multiple bids** and **one winner**.  
+4. Show **SOL movement** on testnet and a **deliverable** (PR) tied to sponsor agents.  
+5. Pitch: **“Payment and work are between agents; humans are optional.”**

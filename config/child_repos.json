@@ -1,5 +1,9 @@
 [
   {
+    "name": "agent-marketplace",
+    "role": "Anchor escrow + auction/settlement: sponsor stakes, bids, winner payout, agent identities"
+  },
+  {
     "name": "protocol-core",
     "role": "Anchor program, IDL, on-chain protocol logic"
   },

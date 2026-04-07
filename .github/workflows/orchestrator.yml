@@ -22,9 +22,11 @@ jobs:
       - name: Sync and run one cycle
         env:
           GITHUB_TOKEN: ${{ secrets.SEPS_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.SEPS_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           GITHUB_ORG: seps-sol
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
+          gh --version
           uv sync
           uv run seps once

@@ -7,6 +7,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
 from seps.config import Settings
+from seps.gh_cli import GhError
 from seps.github_client import OrgClient, load_child_repo_spec
 from seps.llm import get_chat_model
 from seps.state import OrchestratorState
@@ -24,10 +25,37 @@ def build_graph(settings: Settings) -> StateGraph:
     def observe(state: OrchestratorState) -> dict[str, Any]:
         lines: list[str] = []
         if org_client:
-            repos = org_client.list_public_repo_names()
-            lines.append(f"Org repos ({len(repos)}): {', '.join(repos) or '(none)'}")
+            try:
+                repos = org_client.list_public_repo_names()
+                lines.append(f"Org repos ({len(repos)}): {', '.join(repos) or '(none)'}")
+                try:
+                    task_lines = org_client.list_open_issues_with_labels(
+                        settings.github_tasks_repo, ["seps:task"]
+                    )
+                    if task_lines:
+                        lines.append(
+                            f"Open agent tasks in {settings.github_tasks_repo} (label seps:task):"
+                        )
+                        for t in task_lines:
+                            lines.append(f"  {t}")
+                    else:
+                        lines.append(
+                            f"No open `seps:task` issues in {settings.github_tasks_repo}."
+                        )
+                except GhError as exc:
+                    if "could not resolve" in str(exc).lower():
+                        lines.append(
+                            f"Task board: no repo `{settings.github_org}/{settings.github_tasks_repo}` yet "
+                            "(create it or set SEPS_TASKS_REPO)."
+                        )
+                    else:
+                        lines.append(f"Task board: could not list issues ({exc}).")
+            except GhError as exc:
+                lines.append(f"GitHub (gh) org observation failed: {exc}")
         else:
-            lines.append("No GITHUB_TOKEN; observation limited to local spec only.")
+            lines.append(
+                "GitHub CLI unavailable or not authenticated; observation limited to local spec only."
+            )
         lines.append("Target child repos from config:")
         for s in specs:
             lines.append(f"  - {s['name']}: {s['role']}")
@@ -35,7 +63,10 @@ def build_graph(settings: Settings) -> StateGraph:
 
     def plan(state: OrchestratorState) -> dict[str, Any]:
         if not llm:
-            first = specs[0]["name"] if specs else "protocol-core"
+            first = next(
+                (s["name"] for s in specs if s["name"] == "agent-marketplace"),
+                specs[0]["name"] if specs else "agent-marketplace",
+            )
             plan_text = (
                 f"No LLM configured. Heuristic: prefer creating `{first}` next. "
                 "Set ANTHROPIC_API_KEY or OPENAI_API_KEY for LLM planning.\n"
@@ -46,11 +77,13 @@ def build_graph(settings: Settings) -> StateGraph:
         spec_blob = json.dumps(specs, indent=2)
         sys = SystemMessage(
             content=(
-                "You are the SEPS orchestrator planner. Given the observation, "
-                "pick exactly ONE next concrete step for a GitHub org building a Solana protocol swarm. "
-                "Reply with 2-4 short sentences. End with a single line: "
-                "NEXT_REPO: <repo_name> where repo_name is one of the configured child repo names, "
-                "or NONE if only meta-work is needed."
+                "You are the SEPS orchestrator planner for an agent-native marketplace: "
+                "tasks are funded in SOL by sponsor agents; executor agents negotiate; "
+                "the winning executor receives payout and must deliver for those sponsors. "
+                "GitHub (issues labeled seps:task) is the coordination plane; Solana holds escrow/settlement. "
+                "Given the observation, pick exactly ONE next concrete step (repo, program, or task flow). "
+                "Reply with 2-4 short sentences, then a final line exactly: "
+                "NEXT_REPO: <repo_name> from the configured child repo list, or NONE."
             )
         )
         human = HumanMessage(
@@ -77,8 +110,8 @@ def build_graph(settings: Settings) -> StateGraph:
 
         if not org_client:
             return {
-                "action_taken": f"Would act on {repo_name} but GITHUB_TOKEN missing.",
-                "errors": state.get("errors", []) + ["missing_github_token"],
+                "action_taken": f"Would act on {repo_name} but gh is not available or not logged in.",
+                "errors": state.get("errors", []) + ["missing_gh_auth"],
             }
 
         msg = org_client.ensure_repo_exists(
