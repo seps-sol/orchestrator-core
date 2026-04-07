@@ -31,7 +31,15 @@ uv run seps tasks list
 
 ## GitHub Actions
 
-Workflow [`.github/workflows/orchestrator.yml`](.github/workflows/orchestrator.yml) runs on a schedule (every 10 minutes) and via `workflow_dispatch`. The runner includes **`gh`** by default.
+Workflow [`.github/workflows/orchestrator.yml`](.github/workflows/orchestrator.yml) runs on a schedule (**every 2 minutes**; GitHub may delay under load) and via `workflow_dispatch`. Each run:
+
+1. **Pulls every org repo** (shallow clone or `git pull`) into `.org-repos/` on the runner via [`scripts/pull_org_repos.sh`](scripts/pull_org_repos.sh).
+2. Runs **`uv run seps once`**.
+3. **Syncs the org profile README** to [`seps-sol/.github`](https://github.com/seps-sol/.github) (`profile/README.md`) via [`scripts/publish_org_profile.sh`](scripts/publish_org_profile.sh), only committing when the file content changed.
+
+Source for the org landing page lives in [`.github-org-readme/profile/README.md`](.github-org-readme/profile/README.md). Locally you can run the same scripts with `gh` authenticated.
+
+The runner includes **`gh`** by default.
 
 ### Why `createRepository` fails with the default token
 
@@ -46,7 +54,7 @@ Add a repository secret **`SEPS_GITHUB_TOKEN`** whose value is a **Personal Acce
 | **Classic PAT** | Scope **`repo`** (full repo scope covers public and private repo creation). The account must be an **org owner** or a **member** permitted by the org’s **“Repository creation”** policy. If the org uses **SAML SSO**, **authorize** the PAT for that org. |
 | **Fine-grained PAT** | Under the org (or user), include permission to **create** repositories in the org; exact labels vary—if creation is not offered, use a classic PAT with **`repo`**. |
 
-The workflow passes **`SEPS_GITHUB_TOKEN`** to `gh` as `GITHUB_TOKEN` / `GH_TOKEN` when set; otherwise it falls back to the default token (fine for read-only steps, not for `gh repo create`).
+The workflow passes **`SEPS_GITHUB_TOKEN`** to `gh` as `GITHUB_TOKEN` / `GH_TOKEN` when set; otherwise it falls back to the default token (fine for read-only steps, not for `gh repo create` or updating **`org/.github`**). Publishing the org profile and creating the **`.github`** repo require the same PAT to have **`repo`** access (and org permission to create that repository if it does not exist yet).
 
 ## Layout
 
@@ -54,4 +62,7 @@ The workflow passes **`SEPS_GITHUB_TOKEN`** to `gh` as `GITHUB_TOKEN` / `GH_TOKE
 |------|------|
 | `src/seps/` | Orchestrator package (`marketplace` types, graph, GitHub client, CLI) |
 | `config/child_repos.json` | Target child repo names and roles for planning |
+| `scripts/pull_org_repos.sh` | Shallow clone / pull all repos under `GITHUB_ORG` |
+| `scripts/publish_org_profile.sh` | Push org profile README to `ORG/.github` via Contents API |
+| `.github-org-readme/profile/README.md` | Source for the GitHub **organization** profile README |
 | `orchestrator/README.md` | Full PRD |

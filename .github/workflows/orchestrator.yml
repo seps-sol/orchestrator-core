@@ -3,7 +3,8 @@ name: Orchestrator tick
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/10 * * * *"
+    # Every 2 minutes (GitHub may delay under load; see GitHub Actions docs).
+    - cron: "*/2 * * * *"
 
 permissions:
   contents: read
@@ -11,6 +12,7 @@ permissions:
 jobs:
   tick:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -30,5 +32,8 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           gh --version
+          chmod +x scripts/pull_org_repos.sh scripts/publish_org_profile.sh
           uv sync
+          ./scripts/pull_org_repos.sh
           uv run seps once
+          ./scripts/publish_org_profile.sh
