@@ -34,6 +34,9 @@ def _env_for_gh(settings: Settings | None) -> dict[str, str]:
     if token:
         env["GH_TOKEN"] = token
         env["GITHUB_TOKEN"] = token
+    # Non-interactive `gh` (repo create, etc.); avoids deprecated confirmation flags.
+    if os.environ.get("GITHUB_ACTIONS") == "true" or os.environ.get("CI"):
+        env.setdefault("GH_PROMPT_DISABLED", "1")
     return env
 
 

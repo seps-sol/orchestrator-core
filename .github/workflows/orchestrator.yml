@@ -21,6 +21,8 @@ jobs:
 
       - name: Sync and run one cycle
         env:
+          CI: true
+          GH_PROMPT_DISABLED: "1"
           GITHUB_TOKEN: ${{ secrets.SEPS_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.SEPS_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           GITHUB_ORG: seps-sol

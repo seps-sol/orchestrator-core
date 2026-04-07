@@ -31,7 +31,22 @@ uv run seps tasks list
 
 ## GitHub Actions
 
-Workflow [`.github/workflows/orchestrator.yml`](.github/workflows/orchestrator.yml) runs on a schedule (every 10 minutes) and via `workflow_dispatch`. The job sets `GITHUB_TOKEN` for **`gh`**; the hosted runner includes `gh` by default. For **creating repos in the org**, use a PAT with org scope stored as `SEPS_GITHUB_TOKEN` (or override `GITHUB_TOKEN` in the workflow env with that PAT).
+Workflow [`.github/workflows/orchestrator.yml`](.github/workflows/orchestrator.yml) runs on a schedule (every 10 minutes) and via `workflow_dispatch`. The runner includes **`gh`** by default.
+
+### Why `createRepository` fails with the default token
+
+The built-in **`secrets.GITHUB_TOKEN`** is an **installation token scoped to the workflow’s repository**. It **cannot** create **other** repositories under your org (GraphQL: `Resource not accessible by integration (createRepository)`). Listing org repos or issues may work for repos the token can see; **repo creation requires a different credential.**
+
+### What to use instead (`SEPS_GITHUB_TOKEN`)
+
+Add a repository secret **`SEPS_GITHUB_TOKEN`** whose value is a **Personal Access Token** (or other token) for an account that is allowed to **create repositories** in `GITHUB_ORG`:
+
+| Token type | What to enable |
+|------------|----------------|
+| **Classic PAT** | Scope **`repo`** (full repo scope covers public and private repo creation). The account must be an **org owner** or a **member** permitted by the org’s **“Repository creation”** policy. If the org uses **SAML SSO**, **authorize** the PAT for that org. |
+| **Fine-grained PAT** | Under the org (or user), include permission to **create** repositories in the org; exact labels vary—if creation is not offered, use a classic PAT with **`repo`**. |
+
+The workflow passes **`SEPS_GITHUB_TOKEN`** to `gh` as `GITHUB_TOKEN` / `GH_TOKEN` when set; otherwise it falls back to the default token (fine for read-only steps, not for `gh repo create`).
 
 ## Layout
 

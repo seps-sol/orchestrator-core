@@ -94,7 +94,6 @@ class OrgClient:
                 "--public",
                 "--description",
                 description,
-                "-y",
             ],
             settings=self._settings,
             check=True,
