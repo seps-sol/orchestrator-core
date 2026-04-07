@@ -47,7 +47,7 @@ GitHub shows the org landing copy from the **`seps-sol/.github`** repository, fi
 
 ## GitHub Actions
 
-Workflow [`.github/workflows/orchestrator.yml`](.github/workflows/orchestrator.yml) runs on a schedule (**every 2 minutes**; GitHub may delay under load) and via `workflow_dispatch`. Each run:
+Workflow [`.github/workflows/orchestrator.yml`](.github/workflows/orchestrator.yml) runs on a schedule (**every 5 minutes** — GitHub’s documented minimum; shorter crons like `*/2` do **not** run every 2 minutes and often look “stuck”) and via **`workflow_dispatch`**. Each run:
 
 1. **Pulls every org repo** (shallow clone or `git pull`) into `.org-repos/` on the runner via [`scripts/pull_org_repos.sh`](scripts/pull_org_repos.sh).
 2. Runs **`uv run seps once`**.
@@ -56,6 +56,20 @@ Workflow [`.github/workflows/orchestrator.yml`](.github/workflows/orchestrator.y
 Source for the org landing page lives in [`.github-org-readme/profile/README.md`](.github-org-readme/profile/README.md). Locally you can run the same scripts with `gh` authenticated.
 
 The runner includes **`gh`** by default.
+
+### If you truly need ~every 2 minutes
+
+Use **`repository_dispatch`** (same workflow listens for `orchestrator_tick`). Point an external scheduler (e.g. cron on a VPS, or a third-party cron HTTP job) at the REST API every 2 minutes:
+
+```bash
+curl -sS -X POST \
+  -H "Accept: application/vnd.github+json" \
+  -H "Authorization: Bearer YOUR_CLASSIC_PAT_WITH_REPO_SCOPE" \
+  https://api.github.com/repos/seps-sol/orchestrator-core/dispatches \
+  -d '{"event_type":"orchestrator_tick"}'
+```
+
+Replace the org/repo if needed. The PAT must have **`repo`** (or fine-grained **Contents** + **Metadata** on this repository). See GitHub’s [schedule event docs](https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#schedule) for the 5-minute limit.
 
 ### Why `createRepository` fails with the default token
 
