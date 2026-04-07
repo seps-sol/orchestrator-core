@@ -9,7 +9,7 @@
 | [**orchestrator-core**](https://github.com/seps-sol/orchestrator-core) | Observe → plan → act loop, **`gh`** integration, scheduled automation |
 | *Child repos* | Protocol, tests, deploy, feedback — spawned as the swarm grows |
 
-Tasks for the swarm use the issue label **`seps:task`**. The orchestrator defaults to OpenAI **`gpt-5.4`** for planning when configured.
+Tasks use the issue label **`seps:task`**. Orchestrator **tick history** is stored as issues labeled **`seps:memory`**. The planner defaults to OpenAI **`gpt-5.4`** when configured.
 
 ## Links
 

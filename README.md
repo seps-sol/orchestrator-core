@@ -37,6 +37,14 @@ uv run seps memory list
 
 Configure repo with **`SEPS_MEMORY_REPO`** (default: same as `SEPS_TASKS_REPO`).
 
+### Organization profile README
+
+GitHub shows the org landing copy from the **`seps-sol/.github`** repository, file **`profile/README.md`**. Source in this repo: [`.github-org-readme/profile/README.md`](.github-org-readme/profile/README.md). CI runs [`scripts/publish_org_profile.sh`](scripts/publish_org_profile.sh) on each tick; if the profile repo did not exist yet or **`SEPS_GITHUB_TOKEN`** could not create it, run once locally with `gh` logged in and org permission to create repos:
+
+```bash
+./scripts/publish_org_profile.sh
+```
+
 ## GitHub Actions
 
 Workflow [`.github/workflows/orchestrator.yml`](.github/workflows/orchestrator.yml) runs on a schedule (**every 2 minutes**; GitHub may delay under load) and via `workflow_dispatch`. Each run:
