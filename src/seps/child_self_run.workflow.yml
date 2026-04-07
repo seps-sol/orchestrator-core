@@ -1,8 +1,11 @@
-# SEPS: every bootstrapped child repo self-runs on this schedule (GitHub minimum: 5 minutes).
+# SEPS: self-run every 5m + optional cross-repo triggers (see config/ci_triggers.json).
+# Placeholder __SEPS_DOWNSTREAM_JSON__ is replaced at bootstrap time (JSON array string).
 name: SEPS child self run
 
 on:
   workflow_dispatch:
+  repository_dispatch:
+    types: [seps_upstream]
   schedule:
     - cron: "*/5 * * * *"
 
@@ -19,7 +22,29 @@ jobs:
         run: |
           echo "repository=${{ github.repository }}"
           echo "ref=${{ github.ref }}"
+          echo "event=${{ github.event_name }}"
           echo "time_utc=$(date -uIs)"
           for f in package.json Cargo.toml Anchor.toml pyproject.toml go.mod; do
             if [ -f "$f" ]; then echo "found $f"; fi
+          done
+
+      - name: Trigger downstream SEPS repos
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.SEPS_CROSS_REPO_TOKEN }}
+          SEPS_DOWNSTREAM_JSON: '__SEPS_DOWNSTREAM_JSON__'
+        run: |
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "SEPS_CROSS_REPO_TOKEN not set; skipping cross-repo dispatch (set it to a PAT with repo scope)."
+            exit 0
+          fi
+          ORG="${{ github.repository_owner }}"
+          echo "$SEPS_DOWNSTREAM_JSON" | jq -e . >/dev/null 2>&1 || { echo "invalid SEPS_DOWNSTREAM_JSON"; exit 0; }
+          echo "$SEPS_DOWNSTREAM_JSON" | jq -r '.[]' | while read -r TARGET; do
+            [ -z "$TARGET" ] && continue
+            echo "→ dispatch seps_upstream to $ORG/$TARGET (from ${{ github.repository }})"
+            jq -nc --arg from "${{ github.repository }}" \
+              '{event_type:"seps_upstream",client_payload:{from:$from}}' \
+              | gh api --method POST "repos/$ORG/$TARGET/dispatches" --input - \
+              || echo "warn: dispatch failed for $TARGET"
           done

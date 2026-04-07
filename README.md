@@ -51,8 +51,9 @@ Workflow [`.github/workflows/orchestrator.yml`](.github/workflows/orchestrator.y
 
 1. **Pulls every org repo** (shallow clone or `git pull`) into `.org-repos/` on the runner via [`scripts/pull_org_repos.sh`](scripts/pull_org_repos.sh).
 2. Runs **`uv run seps once`**.
-3. Runs **`uv run seps bootstrap workflows`**, which installs or updates [`.github/workflows/seps-self-run.yml`](src/seps/child_self_run.workflow.yml) in **every repo listed in** [`config/child_repos.json`](config/child_repos.json). Each of those workflows is scheduled **`*/5 * * * *`** so **child repos self-run every 5 minutes** on their own runners (GitHub’s minimum interval).
-4. **Syncs the org profile README** to [`seps-sol/.github`](https://github.com/seps-sol/.github) (`profile/README.md`) via [`scripts/publish_org_profile.sh`](scripts/publish_org_profile.sh), only committing when the file content changed.
+3. Runs **`uv run seps bootstrap workflows`**, which installs or updates [`.github/workflows/seps-self-run.yml`](src/seps/child_self_run.workflow.yml) in **every repo listed in** [`config/child_repos.json`](config/child_repos.json). Each workflow runs on **`*/5 * * * *`**, on **`workflow_dispatch`**, and on **`repository_dispatch`** type **`seps_upstream`** (so repos can chain CI). Downstream repo names are **baked in from** [`config/ci_triggers.json`](config/ci_triggers.json) per repo.
+4. Runs **[`scripts/dispatch_downstream.sh`](scripts/dispatch_downstream.sh)** for **`orchestrator-core`**, firing **`seps_upstream`** to that repo’s configured targets (same map), so the orchestrator tick **kicks child CIs** as well.
+5. **Syncs the org profile README** to [`seps-sol/.github`](https://github.com/seps-sol/.github) (`profile/README.md`) via [`scripts/publish_org_profile.sh`](scripts/publish_org_profile.sh), only committing when the file content changed.
 
 Manually re-sync child workflows anytime:
 
@@ -91,7 +92,9 @@ Add a repository secret **`SEPS_GITHUB_TOKEN`** whose value is a **Personal Acce
 | **Classic PAT** | Scope **`repo`** (full repo scope covers public and private repo creation). The account must be an **org owner** or a **member** permitted by the org’s **“Repository creation”** policy. If the org uses **SAML SSO**, **authorize** the PAT for that org. |
 | **Fine-grained PAT** | Under the org (or user), include permission to **create** repositories in the org; exact labels vary—if creation is not offered, use a classic PAT with **`repo`**. |
 
-The workflow passes **`SEPS_GITHUB_TOKEN`** to `gh` as `GITHUB_TOKEN` / `GH_TOKEN` when set; otherwise it falls back to the default token (fine for read-only steps, not for `gh repo create`, updating **`org/.github`**, or **committing workflow files into other org repos**). Use a classic PAT with **`repo`** on an account that can **push to every child repo** listed in `child_repos.json` (org owner, or collaborator on those repos).
+The workflow passes **`SEPS_GITHUB_TOKEN`** to `gh` as `GITHUB_TOKEN` / `GH_TOKEN` when set; otherwise it falls back to the default token (fine for read-only steps, not for `gh repo create`, updating **`org/.github`**, **cross-repo `repository_dispatch`**, or **committing workflow files into other org repos**). Use a classic PAT with **`repo`** on an account that can **push to every child repo** listed in `child_repos.json` (org owner, or collaborator on those repos).
+
+**`SEPS_CROSS_REPO_TOKEN` (per child repo):** add the same classic PAT (or another with **`repo`**) as a secret named **`SEPS_CROSS_REPO_TOKEN`** on **each child repository** that should run the “Trigger downstream SEPS repos” step. Without it, scheduled heartbeats still run, but **cross-repo triggers are skipped**. The orchestrator repo uses **`SEPS_GITHUB_TOKEN`** for [`dispatch_downstream.sh`](scripts/dispatch_downstream.sh); child repos use **`SEPS_CROSS_REPO_TOKEN`** by name so you can scope differently later if needed.
 
 ## Layout
 
@@ -105,4 +108,6 @@ The workflow passes **`SEPS_GITHUB_TOKEN`** to `gh` as `GITHUB_TOKEN` / `GH_TOKE
 | `src/seps/issue_memory.py` | Issue body format + label `seps:memory` for durable tick log |
 | `src/seps/child_self_run.workflow.yml` | Template copied into each child repo as `seps-self-run` (5m schedule) |
 | `src/seps/bootstrap.py` | Installs that workflow via GitHub Contents API |
+| `config/ci_triggers.json` | Which repo dispatches `seps_upstream` to which targets after a successful run |
+| `scripts/dispatch_downstream.sh` | Used by orchestrator CI to fire dispatches from `ci_triggers.json` |
 | `orchestrator/README.md` | Full PRD |

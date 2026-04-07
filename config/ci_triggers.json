@@ -1,0 +1,7 @@
+{
+  "orchestrator-core": ["agent-marketplace", "protocol-core"],
+  "agent-marketplace": ["protocol-core"],
+  "protocol-core": ["tests-suite"],
+  "tests-suite": ["deploy-agent", "feedback-loop"],
+  "deploy-agent": ["feedback-loop"]
+}
