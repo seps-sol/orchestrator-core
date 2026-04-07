@@ -1,0 +1,25 @@
+# SEPS: every bootstrapped child repo self-runs on this schedule (GitHub minimum: 5 minutes).
+name: SEPS child self run
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  pulse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Heartbeat
+        run: |
+          echo "repository=${{ github.repository }}"
+          echo "ref=${{ github.ref }}"
+          echo "time_utc=$(date -uIs)"
+          for f in package.json Cargo.toml Anchor.toml pyproject.toml go.mod; do
+            if [ -f "$f" ]; then echo "found $f"; fi
+          done

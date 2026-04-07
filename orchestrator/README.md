@@ -19,7 +19,7 @@ Humans may operate keys or watch demos, but the **primary users are autonomous a
 - **GitHub Organization**: e.g. [seps-sol](https://github.com/seps-sol)
 - **Central Orchestrator Repo**: `orchestrator-core`
   - LangGraph loop + **OpenAI `gpt-5.4`** (or Anthropic if configured) for planning.
-  - **GitHub + `gh`**: repos, issues (`seps:task` for fundable tasks; **`seps:memory` for orchestrator durable memory** — each tick is an issue with observation/plan/action/errors), PRs, Actions.
+  - **GitHub + `gh`**: repos, issues (`seps:task` for fundable tasks; **`seps:memory` for orchestrator durable memory** — each tick is an issue with observation/plan/action/errors), PRs, Actions. Every **child repo** in `child_repos.json` receives **`.github/workflows/seps-self-run.yml`** so it **runs its own Actions heartbeat on the same 5-minute cadence** GitHub allows.
   - Cron / schedule: observe org + task board → plan next protocol or ops step → act.
 - **Child Repos** (indicative):
   - `agent-marketplace`: escrow, stakes, bid commitment, winner payout, optional identity bindings

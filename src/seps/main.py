@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from seps.bootstrap import bootstrap_child_workflows
 from seps.config import get_settings
 from seps.github_client import OrgClient
 from seps.graph import build_graph
@@ -26,6 +27,18 @@ def cli() -> None:
     memory = sub.add_parser("memory", help="Durable orchestrator memory (GitHub Issues)")
     memory_sub = memory.add_subparsers(dest="memory_cmd", required=True)
     memory_sub.add_parser("list", help="List recent issues labeled seps:memory")
+
+    boot = sub.add_parser("bootstrap", help="Provision org resources from orchestrator-core")
+    boot_sub = boot.add_subparsers(dest="boot_cmd", required=True)
+    wf = boot_sub.add_parser(
+        "workflows",
+        help="Push 5m self-run workflow to every repo in config/child_repos.json",
+    )
+    wf.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print targets only (no GitHub writes)",
+    )
 
     args = parser.parse_args()
     settings = get_settings()
@@ -77,6 +90,16 @@ def cli() -> None:
             print(f"No seps:memory issues in {settings.github_memory_repo}.")
             return
         for line in rows:
+            print(line)
+        return
+
+    if args.cmd == "bootstrap" and args.boot_cmd == "workflows":
+        try:
+            lines = bootstrap_child_workflows(settings, dry_run=args.dry_run)
+        except ValueError as e:
+            print(str(e), file=sys.stderr)
+            sys.exit(1)
+        for line in lines:
             print(line)
         return
 

@@ -51,7 +51,14 @@ Workflow [`.github/workflows/orchestrator.yml`](.github/workflows/orchestrator.y
 
 1. **Pulls every org repo** (shallow clone or `git pull`) into `.org-repos/` on the runner via [`scripts/pull_org_repos.sh`](scripts/pull_org_repos.sh).
 2. Runs **`uv run seps once`**.
-3. **Syncs the org profile README** to [`seps-sol/.github`](https://github.com/seps-sol/.github) (`profile/README.md`) via [`scripts/publish_org_profile.sh`](scripts/publish_org_profile.sh), only committing when the file content changed.
+3. Runs **`uv run seps bootstrap workflows`**, which installs or updates [`.github/workflows/seps-self-run.yml`](src/seps/child_self_run.workflow.yml) in **every repo listed in** [`config/child_repos.json`](config/child_repos.json). Each of those workflows is scheduled **`*/5 * * * *`** so **child repos self-run every 5 minutes** on their own runners (GitHub’s minimum interval).
+4. **Syncs the org profile README** to [`seps-sol/.github`](https://github.com/seps-sol/.github) (`profile/README.md`) via [`scripts/publish_org_profile.sh`](scripts/publish_org_profile.sh), only committing when the file content changed.
+
+Manually re-sync child workflows anytime:
+
+```bash
+uv run seps bootstrap workflows
+```
 
 Source for the org landing page lives in [`.github-org-readme/profile/README.md`](.github-org-readme/profile/README.md). Locally you can run the same scripts with `gh` authenticated.
 
@@ -84,7 +91,7 @@ Add a repository secret **`SEPS_GITHUB_TOKEN`** whose value is a **Personal Acce
 | **Classic PAT** | Scope **`repo`** (full repo scope covers public and private repo creation). The account must be an **org owner** or a **member** permitted by the org’s **“Repository creation”** policy. If the org uses **SAML SSO**, **authorize** the PAT for that org. |
 | **Fine-grained PAT** | Under the org (or user), include permission to **create** repositories in the org; exact labels vary—if creation is not offered, use a classic PAT with **`repo`**. |
 
-The workflow passes **`SEPS_GITHUB_TOKEN`** to `gh` as `GITHUB_TOKEN` / `GH_TOKEN` when set; otherwise it falls back to the default token (fine for read-only steps, not for `gh repo create` or updating **`org/.github`**). Publishing the org profile and creating the **`.github`** repo require the same PAT to have **`repo`** access (and org permission to create that repository if it does not exist yet).
+The workflow passes **`SEPS_GITHUB_TOKEN`** to `gh` as `GITHUB_TOKEN` / `GH_TOKEN` when set; otherwise it falls back to the default token (fine for read-only steps, not for `gh repo create`, updating **`org/.github`**, or **committing workflow files into other org repos**). Use a classic PAT with **`repo`** on an account that can **push to every child repo** listed in `child_repos.json` (org owner, or collaborator on those repos).
 
 ## Layout
 
@@ -96,4 +103,6 @@ The workflow passes **`SEPS_GITHUB_TOKEN`** to `gh` as `GITHUB_TOKEN` / `GH_TOKE
 | `scripts/publish_org_profile.sh` | Push org profile README to `ORG/.github` via Contents API |
 | `.github-org-readme/profile/README.md` | Source for the GitHub **organization** profile README |
 | `src/seps/issue_memory.py` | Issue body format + label `seps:memory` for durable tick log |
+| `src/seps/child_self_run.workflow.yml` | Template copied into each child repo as `seps-self-run` (5m schedule) |
+| `src/seps/bootstrap.py` | Installs that workflow via GitHub Contents API |
 | `orchestrator/README.md` | Full PRD |

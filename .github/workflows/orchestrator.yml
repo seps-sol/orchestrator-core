@@ -41,4 +41,5 @@ jobs:
           uv sync
           ./scripts/pull_org_repos.sh
           uv run seps once
+          uv run seps bootstrap workflows
           ./scripts/publish_org_profile.sh

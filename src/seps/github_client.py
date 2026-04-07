@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import tempfile
 from pathlib import Path
@@ -168,6 +169,100 @@ class OrgClient:
                 Path(path).unlink(missing_ok=True)
         url = (proc.stdout or "").strip()
         return url or f"created memory issue on {repo}"
+
+    def repo_exists(self, name: str) -> bool:
+        full = f"{self._org_login}/{name}"
+        proc = gh_run(
+            ["repo", "view", full, "--json", "name"],
+            settings=self._settings,
+            check=False,
+        )
+        return proc.returncode == 0
+
+    def default_branch(self, repo_name: str) -> str:
+        full = f"{self._org_login}/{repo_name}"
+        row = gh_json(
+            ["repo", "view", full, "--json", "defaultBranchRef"],
+            settings=self._settings,
+        )
+        ref = row.get("defaultBranchRef") if row else None
+        if ref and ref.get("name"):
+            return str(ref["name"])
+        return "main"
+
+    def put_repo_file_if_changed(
+        self,
+        repo_name: str,
+        path: str,
+        content: str,
+        message: str,
+        *,
+        dry_run: bool,
+    ) -> str:
+        """Create or update a single file via Contents API; skip if bytes match."""
+        api_path = f"repos/{self._org_login}/{repo_name}/contents/{path}"
+        if dry_run:
+            return f"[dry-run] would PUT {path}"
+        branch = self.default_branch(repo_name)
+        proc = gh_run(
+            ["api", f"{api_path}?ref={branch}"],
+            settings=self._settings,
+            check=False,
+        )
+        want = content.encode("utf-8")
+        b64_new = base64.b64encode(want).decode("ascii")
+
+        data: dict[str, Any] | None = None
+        if proc.returncode == 0 and proc.stdout.strip():
+            try:
+                data = json.loads(proc.stdout)
+            except json.JSONDecodeError:
+                data = None
+
+        if data and data.get("type") == "file":
+            existing_b64 = str(data.get("content") or "").replace("\n", "")
+            if existing_b64:
+                try:
+                    got = base64.b64decode(existing_b64)
+                    if got == want:
+                        return "unchanged"
+                except (ValueError, OSError):
+                    pass
+            sha = data.get("sha")
+            if not sha:
+                return "unexpected API response (missing sha)"
+            payload: dict[str, str] = {
+                "message": message,
+                "content": b64_new,
+                "sha": sha,
+                "branch": branch,
+            }
+            verb = "updated"
+        else:
+            payload = {
+                "message": message,
+                "content": b64_new,
+                "branch": branch,
+            }
+            verb = "created"
+
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".json",
+            delete=False,
+            encoding="utf-8",
+        ) as tmp:
+            json.dump(payload, tmp)
+            tmp_path = tmp.name
+        try:
+            gh_run(
+                ["api", "-X", "PUT", api_path, "--input", tmp_path],
+                settings=self._settings,
+                check=True,
+            )
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+        return verb
 
     def ensure_repo_exists(self, name: str, description: str, *, dry_run: bool) -> str:
         full = f"{self._org_login}/{name}"
