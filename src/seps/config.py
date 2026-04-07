@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     github_tasks_repo: str = Field(
         default="orchestrator-core", validation_alias="SEPS_TASKS_REPO"
     )
+    github_memory_repo: str = Field(
+        default="orchestrator-core", validation_alias="SEPS_MEMORY_REPO"
+    )
 
     llm_provider: str = Field(default="", validation_alias="SEPS_LLM_PROVIDER")
     anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")

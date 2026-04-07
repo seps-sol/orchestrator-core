@@ -23,6 +23,10 @@ def cli() -> None:
     tasks_sub = tasks.add_subparsers(dest="tasks_cmd", required=True)
     tasks_sub.add_parser("list", help="List open issues labeled seps:task")
 
+    memory = sub.add_parser("memory", help="Durable orchestrator memory (GitHub Issues)")
+    memory_sub = memory.add_subparsers(dest="memory_cmd", required=True)
+    memory_sub.add_parser("list", help="List recent issues labeled seps:memory")
+
     args = parser.parse_args()
     settings = get_settings()
 
@@ -38,6 +42,8 @@ def cli() -> None:
         print("--- observation ---\n", out["observation"], sep="")
         print("--- plan ---\n", out["plan"], sep="")
         print("--- action ---\n", out["action_taken"], sep="")
+        if out.get("memory_note"):
+            print("--- memory ---\n", out["memory_note"], sep="")
         if out.get("errors"):
             print("--- errors ---\n", out["errors"], sep="")
         return
@@ -55,6 +61,22 @@ def cli() -> None:
             print(f"No open seps:task issues in {settings.github_tasks_repo}.")
             return
         for line in lines:
+            print(line)
+        return
+
+    if args.cmd == "memory" and args.memory_cmd == "list":
+        try:
+            client = OrgClient(settings)
+        except ValueError as e:
+            print(str(e), file=sys.stderr)
+            sys.exit(1)
+        rows = client.list_recent_memories(
+            settings.github_memory_repo, limit=30, brief=False
+        )
+        if not rows:
+            print(f"No seps:memory issues in {settings.github_memory_repo}.")
+            return
+        for line in rows:
             print(line)
         return
 

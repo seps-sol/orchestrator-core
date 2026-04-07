@@ -45,12 +45,14 @@ def gh_run(
     *,
     settings: Settings | None = None,
     check: bool = True,
+    stdin: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     proc = subprocess.run(
         ["gh", *args],
         capture_output=True,
         text=True,
         env=_env_for_gh(settings),
+        input=stdin,
     )
     if check and proc.returncode != 0:
         raise GhError(

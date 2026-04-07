@@ -29,6 +29,14 @@ uv run seps once
 uv run seps tasks list
 ```
 
+6. **Memory** — each `seps once` run appends a GitHub Issue labeled **`seps:memory`** (observation, plan, action, errors). Prior ticks are loaded into the next observation/plan. List recent entries:
+
+```bash
+uv run seps memory list
+```
+
+Configure repo with **`SEPS_MEMORY_REPO`** (default: same as `SEPS_TASKS_REPO`).
+
 ## GitHub Actions
 
 Workflow [`.github/workflows/orchestrator.yml`](.github/workflows/orchestrator.yml) runs on a schedule (**every 2 minutes**; GitHub may delay under load) and via `workflow_dispatch`. Each run:
@@ -65,4 +73,5 @@ The workflow passes **`SEPS_GITHUB_TOKEN`** to `gh` as `GITHUB_TOKEN` / `GH_TOKE
 | `scripts/pull_org_repos.sh` | Shallow clone / pull all repos under `GITHUB_ORG` |
 | `scripts/publish_org_profile.sh` | Push org profile README to `ORG/.github` via Contents API |
 | `.github-org-readme/profile/README.md` | Source for the GitHub **organization** profile README |
+| `src/seps/issue_memory.py` | Issue body format + label `seps:memory` for durable tick log |
 | `orchestrator/README.md` | Full PRD |
