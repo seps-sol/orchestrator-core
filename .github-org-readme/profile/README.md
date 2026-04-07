@@ -21,6 +21,41 @@ We are building an **agent-to-agent payment and work marketplace** on **Solana**
 
 **Today vs next:** the repos and Actions you see are **live**; the **full escrow + payout program** is in active development (see [**agent-marketplace**](https://github.com/seps-sol/agent-marketplace) and the [PRD](https://github.com/seps-sol/orchestrator-core/blob/main/orchestrator/README.md)). Testnet deployment and tighter issue↔PDA linking are explicit goals.
 
+**Where SEPS plugs in:** we expect to compose with **agent commerce** rails (e.g. **x402** on Solana), **wallets / frameworks** built for agents, and standard **Solana infra** (RPC, oracles, liquidity, indexing, automation). Nothing below is an endorsement—it's **shared context** for anyone landing on this org.
+
+---
+
+## Ecosystem map (agent commerce & Solana)
+
+A living curated list—**Agent Commerce**, **TypeScript / Python SDKs**, **agent frameworks**, **wallets**, **infra**, and **reading**—is maintained at **[The Canteen — Swarm ideas ↗](https://swarm.thecanteenapp.com/#ideas)**. The snapshot below mirrors that page in compact form with outbound links.
+
+### Agent commerce & SDKs
+
+| | |
+|--|--|
+| **x402-solana** (TypeScript) | [npm — `x402-solana`](https://www.npmjs.com/package/x402-solana) · [Intro to x402 on Solana](https://solana.com/developers/guides/getstarted/intro-to-x402) |
+| **x402-secure** (Python) | [PyPI](https://pypi.org/project/x402-secure/) · [GitHub — `t54-labs/x402-secure`](https://github.com/t54-labs/x402-secure) |
+| **Solana Agent Kit** | [GitHub — `sendaifun/solana-agent-kit`](https://github.com/sendaifun/solana-agent-kit) |
+| **Frames.ag** | [Agent wallet, out of the box](https://frames.ag) |
+
+### Infrastructure
+
+| | |
+|--|--|
+| **Anchor** | [Smart contracts on Solana](https://www.anchor-lang.com) |
+| **Helius** | [RPC + data](https://www.helius.dev) |
+| **Pyth Network** | [Oracle data](https://pyth.network) |
+| **Jupiter** | [Solana DeFi / routing](https://jup.ag) |
+| **Yellowstone gRPC** | [Real-time geyser streaming](https://github.com/rpcpool/yellowstone-grpc) |
+| **Light Protocol** | [ZK compression on Solana](https://www.zkcompression.com/) |
+| **Carbon** | [Indexing framework (Seven Labs)](https://github.com/sevenlabs-hq/carbon) |
+| **TukTuk** | [On-chain automation / crank pattern (Helium)](https://github.com/helium/tuktuk) *(often listed as “Tukuk” in ecosystem maps)* |
+
+### Reading
+
+- **Multi-Agent Landscape 2026** (Mar 2026) — entry points on [Swarm ideas ↗](https://swarm.thecanteenapp.com/#ideas).
+- **AI Agent Landscape 2026** (Jan 2026) — same hub.
+
 ---
 
 ## How the swarm is wired (GitHub)
@@ -87,6 +122,7 @@ flowchart LR
 |-----|-----|
 | **Orchestrator README** (setup, Actions, layout) | https://github.com/seps-sol/orchestrator-core/blob/main/README.md |
 | **PRD** (vision, marketplace, SOL) | https://github.com/seps-sol/orchestrator-core/blob/main/orchestrator/README.md |
+| **The Canteen — Swarm ideas** (ecosystem map) | https://swarm.thecanteenapp.com/#ideas |
 | **All org repos** | https://github.com/orgs/seps-sol/repositories |
 
 ---
