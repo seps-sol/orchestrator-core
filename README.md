@@ -96,6 +96,8 @@ The workflow passes **`SEPS_GITHUB_TOKEN`** to `gh` as `GITHUB_TOKEN` / `GH_TOKE
 
 **`SEPS_CROSS_REPO_TOKEN` (per child repo):** add the same classic PAT (or another with **`repo`**) as a secret named **`SEPS_CROSS_REPO_TOKEN`** on **each child repository** that should run the “Trigger downstream SEPS repos” step. Without it, scheduled heartbeats still run, but **cross-repo triggers are skipped**. The orchestrator repo uses **`SEPS_GITHUB_TOKEN`** for [`dispatch_downstream.sh`](scripts/dispatch_downstream.sh); child repos use **`SEPS_CROSS_REPO_TOKEN`** by name so you can scope differently later if needed.
 
+**Child repos mutate state too:** after the heartbeat job, each child runs the reusable workflow [`.github/workflows/seps-child-orchestrate.yml`](.github/workflows/seps-child-orchestrate.yml) from **`orchestrator-core`**, which executes **`uv run seps once`** with **`SEPS_CHILD_TICK_ONLY=1`**, **`SEPS_MEMORY_REPO` / `SEPS_TASKS_REPO` = that child’s name**, and the **child’s `GITHUB_TOKEN`** (`secrets: inherit`, **`issues: write`**). That appends **`seps:memory`** issues and reads tasks/memory **in the child repo**—while **skipping org-wide `gh repo create`**, which stays the parent/orchestrator job. Add **`OPENAI_API_KEY`** / **`ANTHROPIC_API_KEY`** to each child if you want LLM planning there.
+
 ## Layout
 
 | Path | Role |

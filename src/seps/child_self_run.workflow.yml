@@ -1,5 +1,5 @@
-# SEPS: self-run every 5m + optional cross-repo triggers (see config/ci_triggers.json).
-# Placeholder __SEPS_DOWNSTREAM_JSON__ is replaced at bootstrap time (JSON array string).
+# SEPS: self-run every 5m + child LangGraph tick + cross-repo dispatches.
+# Placeholders: __SEPS_DOWNSTREAM_JSON__, __SEPS_REUSABLE_ORCHESTRATE__ (filled by bootstrap).
 name: SEPS child self run
 
 on:
@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   pulse:
@@ -48,3 +49,12 @@ jobs:
               | gh api --method POST "repos/$ORG/$TARGET/dispatches" --input - \
               || echo "warn: dispatch failed for $TARGET"
           done
+
+  orchestrate:
+    needs: pulse
+    if: success()
+    uses: __SEPS_REUSABLE_ORCHESTRATE__
+    secrets: inherit
+    with:
+      github_org: ${{ github.repository_owner }}
+      repo_short_name: ${{ github.event.repository.name }}

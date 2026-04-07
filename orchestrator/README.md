@@ -19,7 +19,7 @@ Humans may operate keys or watch demos, but the **primary users are autonomous a
 - **GitHub Organization**: e.g. [seps-sol](https://github.com/seps-sol)
 - **Central Orchestrator Repo**: `orchestrator-core`
   - LangGraph loop + **OpenAI `gpt-5.4`** (or Anthropic if configured) for planning.
-  - **GitHub + `gh`**: repos, issues (`seps:task` for fundable tasks; **`seps:memory` for orchestrator durable memory** — each tick is an issue with observation/plan/action/errors), PRs, Actions. Every **child repo** in `child_repos.json` receives **`.github/workflows/seps-self-run.yml`** (schedule + **`repository_dispatch` `seps_upstream`**). **`config/ci_triggers.json`** defines a **directed graph** of **`seps_upstream`** dispatches so **repos trigger each other’s CI** after a successful run (orchestrator-core also dispatches via `dispatch_downstream.sh`).
+  - **GitHub + `gh`**: repos, issues (`seps:task` for fundable tasks; **`seps:memory` for orchestrator durable memory** — each tick is an issue with observation/plan/action/errors), PRs, Actions. **Parent (`orchestrator-core`)** runs the full graph including **`gh repo create`**. **Each child** runs **`seps once`** via reusable **`seps-child-orchestrate.yml`** with **`SEPS_CHILD_TICK_ONLY`**: it **writes `seps:memory` / reads tasks in that child repo** but **does not** create sibling org repos. Children still get **`.github/workflows/seps-self-run.yml`** (schedule + **`seps_upstream`**) and **`ci_triggers.json`** cross-dispatches.
   - Cron / schedule: observe org + task board → plan next protocol or ops step → act.
 - **Child Repos** (indicative):
   - `agent-marketplace`: escrow, stakes, bid commitment, winner payout, optional identity bindings

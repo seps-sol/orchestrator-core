@@ -29,7 +29,13 @@ class Settings(BaseSettings):
     openai_api_key: str = Field(default="", validation_alias="OPENAI_API_KEY")
     model: str = Field(default="gpt-5.4", validation_alias="SEPS_MODEL")
 
+    seps_child_tick_only: str = Field(default="", validation_alias="SEPS_CHILD_TICK_ONLY")
+
     repo_root: Path = Field(default_factory=lambda: Path(__file__).resolve().parents[2])
+
+    def child_tick_only(self) -> bool:
+        v = self.seps_child_tick_only.strip().lower()
+        return v in ("1", "true", "yes", "on")
 
     def effective_llm_provider(self) -> str:
         p = (self.llm_provider or "").strip().lower()

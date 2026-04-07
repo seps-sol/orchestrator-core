@@ -22,13 +22,21 @@ def build_graph(settings: Settings) -> StateGraph:
     except ValueError:
         org_client = None
     llm = get_chat_model(settings)
+    child = settings.child_tick_only()
 
     def observe(state: OrchestratorState) -> dict[str, Any]:
         lines: list[str] = []
         if org_client:
             try:
-                repos = org_client.list_public_repo_names()
-                lines.append(f"Org repos ({len(repos)}): {', '.join(repos) or '(none)'}")
+                if child:
+                    lines.append(
+                        f"Child tick (`SEPS_CHILD_TICK_ONLY`): this run is scoped to "
+                        f"`{settings.github_org}/{settings.github_tasks_repo}` "
+                        "(Issues memory/tasks); org-wide repo listing is skipped."
+                    )
+                else:
+                    repos = org_client.list_public_repo_names()
+                    lines.append(f"Org repos ({len(repos)}): {', '.join(repos) or '(none)'}")
                 try:
                     task_lines = org_client.list_open_issues_with_labels(
                         settings.github_tasks_repo, ["seps:task"]
@@ -75,14 +83,15 @@ def build_graph(settings: Settings) -> StateGraph:
                     else:
                         lines.append(f"Memory: could not list issues ({exc}).")
             except GhError as exc:
-                lines.append(f"GitHub (gh) org observation failed: {exc}")
+                lines.append(f"GitHub (gh) observation failed: {exc}")
         else:
             lines.append(
                 "GitHub CLI unavailable or not authenticated; observation limited to local spec only."
             )
-        lines.append("Target child repos from config:")
-        for s in specs:
-            lines.append(f"  - {s['name']}: {s['role']}")
+        if not child:
+            lines.append("Target child repos from config:")
+            for s in specs:
+                lines.append(f"  - {s['name']}: {s['role']}")
         return {"observation": "\n".join(lines)}
 
     def plan(state: OrchestratorState) -> dict[str, Any]:
@@ -98,6 +107,27 @@ def build_graph(settings: Settings) -> StateGraph:
                     )
             except GhError:
                 memory_index = ""
+
+        if child:
+            if not llm:
+                return {
+                    "plan": "Child tick: no LLM configured; no org-level mutations.\nNEXT_REPO: NONE"
+                }
+            sys = SystemMessage(
+                content=(
+                    "You are a SEPS agent in CHILD_TICK_ONLY mode for one repository. "
+                    "Use observation, tasks (seps:task), and memory (seps:memory) for context. "
+                    "Propose concrete next steps for THIS repo only (code, tests, docs). "
+                    "Do not plan creating other org repos or naming NEXT_REPO targets—those are orchestrator-core only. "
+                    "Reply in 2-4 sentences, then a final line exactly: NEXT_REPO: NONE"
+                )
+            )
+            human = HumanMessage(
+                content=f"Observation:\n{state['observation']}{memory_index}"
+            )
+            out = llm.invoke([sys, human])
+            text = out.content if isinstance(out.content, str) else str(out.content)
+            return {"plan": text}
 
         if not llm:
             first = next(
@@ -136,6 +166,11 @@ def build_graph(settings: Settings) -> StateGraph:
         return {"plan": text}
 
     def act(state: OrchestratorState) -> dict[str, Any]:
+        if child:
+            return {
+                "action_taken": "Child tick: skipped org-level repo creation (SEPS_CHILD_TICK_ONLY).",
+            }
+
         plan_text = state["plan"]
         repo_name: str | None = None
         for line in plan_text.splitlines():
