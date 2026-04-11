@@ -30,12 +30,12 @@ flowchart LR
 
 | Mode | Where | `seps once` behavior |
 |------|--------|----------------------|
-| **Parent** | This repo’s CI / your laptop | Full loop: org observation, LLM plan, **`gh repo create`** for `NEXT_REPO`, **remember** → `SEPS_MEMORY_REPO` (default **this** repo). |
-| **Child** | Reusable [`.github/workflows/seps-child-orchestrate.yml`](.github/workflows/seps-child-orchestrate.yml) | **`SEPS_CHILD_TICK_ONLY`**: same loop but **no org repo creation**; memory + tasks scoped to **that child** via `SEPS_MEMORY_REPO` / `SEPS_TASKS_REPO`. |
+| **Parent** | This repo’s CI / your laptop | Full loop: org observation, LLM plan (plus optional **`config/steering.md`** injected into context), **`gh repo create`** for `NEXT_REPO`, optional new **`seps:task`** when the plan ends with `SEPS_OPEN_TASK: yes`, **remember** → `SEPS_MEMORY_REPO` (default **this** repo). |
+| **Child** | Reusable [`.github/workflows/seps-child-orchestrate.yml`](.github/workflows/seps-child-orchestrate.yml) | **`SEPS_CHILD_TICK_ONLY`**: same loop but **no org repo creation**; memory + tasks scoped to **that child** via `SEPS_MEMORY_REPO` / `SEPS_TASKS_REPO`; may open **`seps:task`** on **this** repo when the plan opts in. |
 
 **Issue labels:** **`seps:task`** (work board), **`seps:memory`** (tick log).  
 **Cross-repo CI:** [`config/ci_triggers.json`](config/ci_triggers.json) + **`repository_dispatch`** event **`seps_upstream`**.  
-**Child workflow file:** pushed from [`src/seps/child_self_run.workflow.yml`](src/seps/child_self_run.workflow.yml) by [`uv run seps bootstrap workflows`](src/seps/bootstrap.py).
+**Child workflow file:** pushed from [`src/seps/child_self_run.workflow.yml`](src/seps/child_self_run.workflow.yml) by [`uv run seps bootstrap workflows`](src/seps/bootstrap.py) (same **hourly** schedule as the parent).
 
 ---
 
@@ -67,7 +67,7 @@ Org landing copy (GitHub profile) is edited in [`.github-org-readme/profile/READ
 
 ## GitHub Actions (parent workflow)
 
-[`.github/workflows/orchestrator.yml`](.github/workflows/orchestrator.yml) — **schedule `*/5 * * * *`** (GitHub’s minimum; not every 2 min), **`workflow_dispatch`**, **`repository_dispatch`** (`orchestrator_tick`, `seps_upstream`).
+[`.github/workflows/orchestrator.yml`](.github/workflows/orchestrator.yml) — **schedule `0 * * * *`** (hourly at :00 UTC), **`workflow_dispatch`**, **`repository_dispatch`** (`orchestrator_tick`, `seps_upstream`).
 
 Each run (simplified): **pull all org repos** → **`seps once`** → **`seps bootstrap workflows`** → **`dispatch_downstream.sh`** (orchestrator’s row in `ci_triggers.json`) → **publish org profile**.
 
@@ -79,7 +79,7 @@ Each run (simplified): **pull all org repos** → **`seps once`** → **`seps bo
 | **`SEPS_CROSS_REPO_TOKEN`** | **each child** (optional) | PAT with **`repo`** so the child workflow can **`repository_dispatch`** to downstream repos. Without it, pulse still runs; **downstream dispatch is skipped**. |
 | **`OPENAI_API_KEY`** / **`ANTHROPIC_API_KEY`** | parent + optionally each child | LLM planning; children only need this if you want LLM in **child** ticks. |
 
-**Faster than 5 minutes:** use an external cron hitting [`repository_dispatch`](https://docs.github.com/en/rest/repos/repos#create-a-repository-dispatch-event) with `event_type: orchestrator_tick` (see older README section or GitHub docs).
+**More frequent than hourly:** use an external cron hitting [`repository_dispatch`](https://docs.github.com/en/rest/repos/repos#create-a-repository-dispatch-event) with `event_type: orchestrator_tick`.
 
 ---
 
@@ -92,6 +92,7 @@ Each run (simplified): **pull all org repos** → **`seps once`** → **`seps bo
 | `src/seps/bootstrap.py` | Renders + pushes child `seps-self-run.yml` |
 | `src/seps/child_self_run.workflow.yml` | Child template (schedule, dispatch, reusable orchestrate) |
 | `.github/workflows/seps-child-orchestrate.yml` | Reusable: checkout this repo, `uv run seps once` with child env |
+| `config/steering.md` | Product steering text injected into every LLM plan (edit freely) |
 | `config/child_repos.json` | Repo names the parent can plan / bootstrap |
 | `config/ci_triggers.json` | Downstream list per repo for `seps_upstream` |
 | `scripts/pull_org_repos.sh` | Shallow pull/clone all org repos on the runner |

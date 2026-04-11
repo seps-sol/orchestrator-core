@@ -2,14 +2,13 @@ name: Orchestrator tick
 
 on:
   workflow_dispatch:
-  # Optional: hit every ~2 min from an external cron (GitHub-hosted schedules cannot go below 5 min).
+  # Optional: faster than hourly via external cron → repository_dispatch (orchestrator_tick).
   # POST /repos/seps-sol/orchestrator-core/dispatches with event_type "orchestrator_tick" (repo-scoped PAT).
   repository_dispatch:
     types: [orchestrator_tick, seps_upstream]
   schedule:
-    # GitHub documents: shortest supported schedule is every 5 minutes (sub-5-min cron is ignored/delayed).
-    # https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule
-    - cron: "*/5 * * * *"
+    # Hourly at :00 UTC (use repository_dispatch above for sub-hourly ticks).
+    - cron: "0 * * * *"
 
 permissions:
   contents: read

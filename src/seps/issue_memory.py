@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 MEMORY_LABEL = "seps:memory"
+TASK_LABEL = "seps:task"
 
 
 def tick_title(prefix: str = "seps memory") -> str:

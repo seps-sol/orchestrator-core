@@ -81,9 +81,9 @@ flowchart LR
 
 | Role | Repository | What runs |
 |------|------------|-----------|
-| **Parent** | [**orchestrator-core**](https://github.com/seps-sol/orchestrator-core) | Full **`seps once`**: org view, LLM plan (**`gpt-5.4`** when configured), **`gh repo create`**, **remember** into Issues. CI every **5 min** (GitHub schedule minimum), plus **`workflow_dispatch`** / **`repository_dispatch`**. |
+| **Parent** | [**orchestrator-core**](https://github.com/seps-sol/orchestrator-core) | Full **`seps once`**: org view, LLM plan (**`gpt-5.4`** when configured), **`gh repo create`**, **remember** into Issues. CI **hourly** (UTC), plus **`workflow_dispatch`** / **`repository_dispatch`**. |
 | **Profile** | [**`.github`**](https://github.com/seps-sol/.github) (this repo) | **Only** [`profile/README.md`](https://github.com/seps-sol/.github/blob/main/profile/README.md) for the [org landing page](https://github.com/seps-sol). Synced from orchestrator via [`publish_org_profile.sh`](https://github.com/seps-sol/orchestrator-core/blob/main/scripts/publish_org_profile.sh). |
-| **Children** | See table below | **`SEPS child self run`**: heartbeat → optional downstream **`seps_upstream`** → reusable workflow runs **`seps once`** with **`SEPS_CHILD_TICK_ONLY`** (memory + tasks **per repo**, **no** sibling repo creation). |
+| **Children** | See table below | **`SEPS child self run`** (hourly UTC): heartbeat → optional downstream **`seps_upstream`** → reusable workflow runs **`seps once`** with **`SEPS_CHILD_TICK_ONLY`** (memory + tasks **per repo**, **no** sibling repo creation). |
 
 ### Target child repositories
 

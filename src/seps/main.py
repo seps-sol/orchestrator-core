@@ -32,7 +32,7 @@ def cli() -> None:
     boot_sub = boot.add_subparsers(dest="boot_cmd", required=True)
     wf = boot_sub.add_parser(
         "workflows",
-        help="Push 5m self-run workflow to every repo in config/child_repos.json",
+        help="Push hourly self-run workflow to every repo in config/child_repos.json",
     )
     wf.add_argument(
         "--dry-run",

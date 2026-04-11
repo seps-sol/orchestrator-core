@@ -11,7 +11,107 @@ from seps.gh_cli import GhError
 from seps.github_client import OrgClient, load_child_repo_spec
 from seps.issue_memory import format_memory_body, tick_title
 from seps.llm import get_chat_model
+from seps.plan_parse import parse_plan_directives
 from seps.state import OrchestratorState
+from seps.steering_context import load_steering_context
+
+_PLAN_FOOTER = """
+After your prose, end with exactly these machine-parseable lines (one key per line, first colon separates key from value):
+NEXT_REPO: NONE | <repo_name from configured child list>  (orchestrator only — in child mode must be NONE)
+SEPS_OPEN_TASK: no | yes
+SEPS_TASK_TITLE: NONE | <short imperative title>
+SEPS_TASK_DETAIL: NONE | <one line acceptance criteria / definition of done>
+SEPS_TASK_REPO: NONE | <repo_name>  (GitHub repo for the new issue; NONE = default task board from environment)
+
+Rules: Use SEPS_OPEN_TASK: yes only for a single shippable slice that fits roughly one PR. Use NONE for unused fields. In child mode, NEXT_REPO must be NONE and SEPS_TASK_REPO must be NONE (tasks open only on this repository).
+""".strip()
+
+
+def _next_repo_name(plan_text: str, directives: dict[str, str]) -> str | None:
+    raw = directives.get("NEXT_REPO")
+    if raw is not None:
+        val = raw.strip()
+        return None if not val or val.upper() == "NONE" else val
+    for line in plan_text.splitlines():
+        if line.strip().upper().startswith("NEXT_REPO:"):
+            v = line.split(":", 1)[1].strip()
+            return None if not v or v.upper() == "NONE" else v
+    return None
+
+
+def _allowed_task_repo_names(settings: Settings, specs: list[dict[str, Any]]) -> set[str]:
+    names = {str(s["name"]) for s in specs}
+    names.add(settings.github_tasks_repo)
+    names.add(settings.github_memory_repo)
+    return names
+
+
+def _steered_task_message(
+    *,
+    org_client: OrgClient | None,
+    settings: Settings,
+    directives: dict[str, str],
+    dry_run: bool,
+    specs: list[dict[str, Any]],
+    child: bool,
+) -> str:
+    """Create optional `seps:task` from planner directives; return human-readable result or ""."""
+    if not org_client:
+        return ""
+
+    open_raw = directives.get("SEPS_OPEN_TASK", "").strip().lower()
+    if open_raw not in ("yes", "y", "true", "1"):
+        return ""
+
+    title = directives.get("SEPS_TASK_TITLE", "").strip()
+    if not title or title.upper() == "NONE":
+        return "SEPS_OPEN_TASK yes but missing SEPS_TASK_TITLE; skipped task create."
+
+    detail = directives.get("SEPS_TASK_DETAIL", "").strip()
+    if detail.upper() == "NONE":
+        detail = ""
+
+    allowed = _allowed_task_repo_names(settings, specs)
+    notes: list[str] = []
+
+    if child:
+        task_repo = settings.github_tasks_repo
+        tr = directives.get("SEPS_TASK_REPO", "").strip()
+        if tr and tr.upper() != "NONE" and tr != task_repo:
+            notes.append(
+                f"Ignored SEPS_TASK_REPO={tr!r} (child tick tasks only on {task_repo})."
+            )
+    else:
+        tr = directives.get("SEPS_TASK_REPO", "").strip()
+        if not tr or tr.upper() == "NONE":
+            task_repo = settings.github_tasks_repo
+        elif tr in allowed:
+            task_repo = tr
+        else:
+            return (
+                f"Invalid SEPS_TASK_REPO {tr!r} (allowed: {', '.join(sorted(allowed))}); "
+                "skipped task create."
+            )
+
+    if title.strip().lower() in org_client.open_task_titles_lower(task_repo):
+        notes.append(
+            f"Open task already exists with title {title!r} on {task_repo}; skipped."
+        )
+        return " ".join(notes) if notes else ""
+
+    body = "## Steered task (orchestrator tick)\n\n"
+    if detail:
+        body += f"**Acceptance:** {detail}\n\n"
+    body += "_Created from planner directives (`SEPS_OPEN_TASK: yes`). Close when done._\n"
+
+    try:
+        msg = org_client.create_task_issue(task_repo, title, body, dry_run=dry_run)
+    except GhError as exc:
+        return f"Task create failed: {exc}"
+
+    if notes:
+        return f"{' '.join(notes)} {msg}".strip()
+    return msg
 
 
 def build_graph(settings: Settings) -> StateGraph:
@@ -23,6 +123,12 @@ def build_graph(settings: Settings) -> StateGraph:
         org_client = None
     llm = get_chat_model(settings)
     child = settings.child_tick_only()
+    steering_block = load_steering_context(settings.repo_root)
+    steering_inject = (
+        f"## Product steering (from config/steering.md)\n\n{steering_block}\n\n"
+        if steering_block
+        else ""
+    )
 
     def observe(state: OrchestratorState) -> dict[str, Any]:
         lines: list[str] = []
@@ -111,19 +217,30 @@ def build_graph(settings: Settings) -> StateGraph:
         if child:
             if not llm:
                 return {
-                    "plan": "Child tick: no LLM configured; no org-level mutations.\nNEXT_REPO: NONE"
+                    "plan": (
+                        "Child tick: no LLM configured; no org-level mutations.\n"
+                        "NEXT_REPO: NONE\n"
+                        "SEPS_OPEN_TASK: no\n"
+                        "SEPS_TASK_TITLE: NONE\n"
+                        "SEPS_TASK_DETAIL: NONE\n"
+                        "SEPS_TASK_REPO: NONE"
+                    )
                 }
             sys = SystemMessage(
                 content=(
                     "You are a SEPS agent in CHILD_TICK_ONLY mode for one repository. "
                     "Use observation, tasks (seps:task), and memory (seps:memory) for context. "
                     "Propose concrete next steps for THIS repo only (code, tests, docs). "
-                    "Do not plan creating other org repos or naming NEXT_REPO targets—those are orchestrator-core only. "
-                    "Reply in 2-4 sentences, then a final line exactly: NEXT_REPO: NONE"
+                    "Do not plan creating other org repos — that is orchestrator-core only. "
+                    "Steer work toward the Solana marketplace + escrow outcomes described in steering. "
+                    f"{_PLAN_FOOTER}"
                 )
             )
             human = HumanMessage(
-                content=f"Observation:\n{state['observation']}{memory_index}"
+                content=(
+                    f"{steering_inject}"
+                    f"Observation:\n{state['observation']}{memory_index}"
+                )
             )
             out = llm.invoke([sys, human])
             text = out.content if isinstance(out.content, str) else str(out.content)
@@ -137,7 +254,11 @@ def build_graph(settings: Settings) -> StateGraph:
             plan_text = (
                 f"No LLM configured. Heuristic: prefer creating `{first}` next. "
                 "Set ANTHROPIC_API_KEY or OPENAI_API_KEY for LLM planning.\n"
-                f"NEXT_REPO: {first}"
+                f"NEXT_REPO: {first}\n"
+                "SEPS_OPEN_TASK: no\n"
+                "SEPS_TASK_TITLE: NONE\n"
+                "SEPS_TASK_DETAIL: NONE\n"
+                "SEPS_TASK_REPO: NONE"
             )
             return {"plan": plan_text}
 
@@ -151,12 +272,14 @@ def build_graph(settings: Settings) -> StateGraph:
                 "Prior orchestrator ticks are stored as GitHub Issues labeled seps:memory — use them as continuity "
                 "when the observation summary references them. "
                 "Given the observation, pick exactly ONE next concrete step (repo, program, or task flow). "
-                "Reply with 2-4 short sentences, then a final line exactly: "
-                "NEXT_REPO: <repo_name> from the configured child repo list, or NONE."
+                "You may open a new steered task issue only when SEPS_OPEN_TASK: yes and the title/detail are "
+                "specific enough for another agent to execute without guessing. "
+                f"{_PLAN_FOOTER}"
             )
         )
         human = HumanMessage(
             content=(
+                f"{steering_inject}"
                 f"Configured repos:\n{spec_blob}\n\nObservation:\n{state['observation']}"
                 f"{memory_index}"
             )
@@ -166,35 +289,54 @@ def build_graph(settings: Settings) -> StateGraph:
         return {"plan": text}
 
     def act(state: OrchestratorState) -> dict[str, Any]:
-        if child:
-            return {
-                "action_taken": "Child tick: skipped org-level repo creation (SEPS_CHILD_TICK_ONLY).",
-            }
-
         plan_text = state["plan"]
-        repo_name: str | None = None
-        for line in plan_text.splitlines():
-            if line.strip().upper().startswith("NEXT_REPO:"):
-                raw = line.split(":", 1)[1].strip()
-                repo_name = None if raw.upper() == "NONE" else raw
-                break
+        directives = parse_plan_directives(plan_text)
+        parts: list[str] = []
 
-        if not repo_name:
-            return {"action_taken": "No NEXT_REPO in plan; no GitHub mutation."}
+        if child:
+            parts.append(
+                "Child tick: skipped org-level repo creation (SEPS_CHILD_TICK_ONLY)."
+            )
+        else:
+            repo_name = _next_repo_name(plan_text, directives)
+            if repo_name:
+                spec = next((s for s in specs if s["name"] == repo_name), None)
+                description = spec["role"] if spec else "SEPS child repo"
+                if not org_client:
+                    parts.append(
+                        f"Would ensure repo {repo_name} but gh is not available or not logged in."
+                    )
+                    err = state.get("errors", []) + ["missing_gh_auth"]
+                    task_msg = _steered_task_message(
+                        org_client=None,
+                        settings=settings,
+                        directives=directives,
+                        dry_run=state["dry_run"],
+                        specs=specs,
+                        child=False,
+                    )
+                    if task_msg:
+                        parts.append(task_msg)
+                    return {"action_taken": " ".join(parts), "errors": err}
+                msg = org_client.ensure_repo_exists(
+                    repo_name, description, dry_run=state["dry_run"]
+                )
+                parts.append(msg)
+            else:
+                parts.append("No NEXT_REPO in plan; no repo create.")
 
-        spec = next((s for s in specs if s["name"] == repo_name), None)
-        description = spec["role"] if spec else "SEPS child repo"
-
-        if not org_client:
-            return {
-                "action_taken": f"Would act on {repo_name} but gh is not available or not logged in.",
-                "errors": state.get("errors", []) + ["missing_gh_auth"],
-            }
-
-        msg = org_client.ensure_repo_exists(
-            repo_name, description, dry_run=state["dry_run"]
+        task_msg = _steered_task_message(
+            org_client=org_client,
+            settings=settings,
+            directives=directives,
+            dry_run=state["dry_run"],
+            specs=specs,
+            child=child,
         )
-        return {"action_taken": msg}
+        if task_msg:
+            parts.append(task_msg)
+
+        return {"action_taken": " ".join(parts)}
 
     def remember(state: OrchestratorState) -> dict[str, Any]:
         if not org_client:

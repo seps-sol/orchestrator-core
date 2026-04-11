@@ -8,7 +8,7 @@ from typing import Any
 
 from seps.config import Settings
 from seps.gh_cli import GhError, assert_gh_auth, gh_json, gh_run
-from seps.issue_memory import MEMORY_LABEL
+from seps.issue_memory import MEMORY_LABEL, TASK_LABEL
 
 
 def load_child_repo_spec(repo_root: Path) -> list[dict[str, Any]]:
@@ -84,6 +84,91 @@ class OrgClient:
             settings=self._settings,
             check=False,
         )
+
+    def ensure_task_label(self, repo_name: str) -> None:
+        repo = f"{self._org_login}/{repo_name}"
+        gh_run(
+            [
+                "label",
+                "create",
+                TASK_LABEL,
+                "--repo",
+                repo,
+                "--color",
+                "FBCA04",
+                "--description",
+                "SEPS agent-executable work item (negotiable / fundable task)",
+            ],
+            settings=self._settings,
+            check=False,
+        )
+
+    def open_task_titles_lower(self, repo_name: str, *, limit: int = 100) -> set[str]:
+        repo = f"{self._org_login}/{repo_name}"
+        rows = gh_json(
+            [
+                "issue",
+                "list",
+                "--repo",
+                repo,
+                "--state",
+                "open",
+                "--limit",
+                str(limit),
+                "--json",
+                "title",
+                "--label",
+                TASK_LABEL,
+            ],
+            settings=self._settings,
+        )
+        if not rows:
+            return set()
+        return {str(r.get("title") or "").strip().lower() for r in rows if r.get("title")}
+
+    def create_task_issue(
+        self,
+        repo_name: str,
+        title: str,
+        body: str,
+        *,
+        dry_run: bool,
+    ) -> str:
+        repo = f"{self._org_login}/{repo_name}"
+        if dry_run:
+            return f"[dry-run] would create {TASK_LABEL} issue on {repo}: {title!r}"
+        self.ensure_task_label(repo_name)
+        path: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                suffix=".md",
+                delete=False,
+                encoding="utf-8",
+            ) as tmp:
+                tmp.write(body)
+                path = tmp.name
+            proc = gh_run(
+                [
+                    "issue",
+                    "create",
+                    "--repo",
+                    repo,
+                    "--title",
+                    title,
+                    "--label",
+                    TASK_LABEL,
+                    "--body-file",
+                    path,
+                ],
+                settings=self._settings,
+                check=True,
+            )
+        finally:
+            if path:
+                Path(path).unlink(missing_ok=True)
+        url = (proc.stdout or "").strip()
+        return url or f"created task issue on {repo}"
 
     def list_recent_memories(
         self,

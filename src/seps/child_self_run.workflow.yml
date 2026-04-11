@@ -1,4 +1,4 @@
-# SEPS: self-run every 5m + child LangGraph tick + cross-repo dispatches.
+# SEPS: self-run hourly + child LangGraph tick + cross-repo dispatches.
 # Placeholders: __SEPS_DOWNSTREAM_JSON__, __SEPS_REUSABLE_ORCHESTRATE__ (filled by bootstrap).
 name: SEPS child self run
 
@@ -7,7 +7,7 @@ on:
   repository_dispatch:
     types: [seps_upstream]
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "0 * * * *"
 
 permissions:
   contents: read
