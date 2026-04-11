@@ -18,3 +18,9 @@ Only when **all** hold:
 - The task fits in **roughly one PR** or one focused session.
 
 Otherwise use `SEPS_OPEN_TASK: no` and rely on `seps:memory` for the tick log.
+
+## Draft PR handoff (`SEPS_EXECUTE`)
+
+When you also set **`SEPS_EXECUTE: yes`** in the same plan footer (only with **`SEPS_OPEN_TASK: yes`**), the orchestrator opens a **draft PR** on the task repo that adds `docs/seps-handoffs/issue-<n>.md` (issue snapshot + optional **`SEPS_EXECUTE_LLM: yes`** outline). That is the default **build bridge**—still not merging product code automatically.
+
+For one-off runs use **`uv run seps execute --repo <short-name> --issue <n>`** or the GitHub Action **“SEPS execute task”** on `orchestrator-core`.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,18 @@ from seps.issue_memory import MEMORY_LABEL, TASK_LABEL
 def load_child_repo_spec(repo_root: Path) -> list[dict[str, Any]]:
     path = repo_root / "config" / "child_repos.json"
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def parse_issue_number_from_create_output(stdout: str) -> int | None:
+    """Parse GitHub issue number from `gh issue create` stdout (URL or trailing #n)."""
+    s = stdout.strip()
+    m = re.search(r"github\.com/[^/]+/[^/]+/issues/(\d+)", s)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"#(\d+)\s*$", s)
+    if m:
+        return int(m.group(1))
+    return None
 
 
 class OrgClient:
@@ -133,10 +146,13 @@ class OrgClient:
         body: str,
         *,
         dry_run: bool,
-    ) -> str:
+    ) -> tuple[str, int | None]:
         repo = f"{self._org_login}/{repo_name}"
         if dry_run:
-            return f"[dry-run] would create {TASK_LABEL} issue on {repo}: {title!r}"
+            return (
+                f"[dry-run] would create {TASK_LABEL} issue on {repo}: {title!r}",
+                None,
+            )
         self.ensure_task_label(repo_name)
         path: str | None = None
         try:
@@ -168,7 +184,8 @@ class OrgClient:
             if path:
                 Path(path).unlink(missing_ok=True)
         url = (proc.stdout or "").strip()
-        return url or f"created task issue on {repo}"
+        msg = url or f"created task issue on {repo}"
+        return msg, parse_issue_number_from_create_output(url)
 
     def list_recent_memories(
         self,

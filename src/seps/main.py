@@ -5,6 +5,8 @@ import sys
 
 from seps.bootstrap import bootstrap_child_workflows
 from seps.config import get_settings
+from seps.execute_task import run_execute_issue
+from seps.gh_cli import GhError
 from seps.github_client import OrgClient
 from seps.graph import build_graph
 
@@ -32,12 +34,33 @@ def cli() -> None:
     boot_sub = boot.add_subparsers(dest="boot_cmd", required=True)
     wf = boot_sub.add_parser(
         "workflows",
-        help="Push hourly self-run workflow to every repo in config/child_repos.json",
+        help="Push manual-only self-run workflow to every repo in config/child_repos.json",
     )
     wf.add_argument(
         "--dry-run",
         action="store_true",
         help="Print targets only (no GitHub writes)",
+    )
+
+    ex = sub.add_parser(
+        "execute",
+        help="Open a draft PR with a handoff doc for a seps:task issue (clone, branch, push)",
+    )
+    ex.add_argument(
+        "--repo",
+        required=True,
+        help="Short repo name under GITHUB_ORG (e.g. agent-marketplace)",
+    )
+    ex.add_argument("--issue", type=int, required=True, help="GitHub issue number")
+    ex.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would happen without cloning or opening a PR",
+    )
+    ex.add_argument(
+        "--with-llm",
+        action="store_true",
+        help="Append an LLM-written implementation outline to the handoff doc",
     )
 
     args = parser.parse_args()
@@ -101,6 +124,21 @@ def cli() -> None:
             sys.exit(1)
         for line in lines:
             print(line)
+        return
+
+    if args.cmd == "execute":
+        try:
+            msg = run_execute_issue(
+                settings,
+                args.repo,
+                args.issue,
+                dry_run=args.dry_run,
+                with_llm=args.with_llm,
+            )
+        except (ValueError, GhError) as e:
+            print(str(e), file=sys.stderr)
+            sys.exit(1)
+        print(msg)
         return
 
     parser.print_help()

@@ -1,0 +1,57 @@
+# Manual Actions only.
+name: SEPS execute task
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_repo:
+        description: Short repo name under the org (e.g. agent-marketplace)
+        required: true
+        type: string
+      issue_number:
+        description: GitHub issue number (must be labeled seps:task)
+        required: true
+        type: number
+      with_llm_outline:
+        description: Append LLM implementation outline (uses API credits)
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: read
+  pull-requests: write
+
+concurrency:
+  group: seps-execute-${{ inputs.target_repo }}-${{ inputs.issue_number }}
+  cancel-in-progress: true
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.8.5"
+
+      - name: Run seps execute
+        env:
+          CI: true
+          GH_PROMPT_DISABLED: "1"
+          GITHUB_TOKEN: ${{ secrets.SEPS_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.SEPS_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_ORG: ${{ github.repository_owner }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          uv sync
+          if [ "${{ inputs.with_llm_outline }}" = "true" ]; then
+            uv run seps execute --repo "${{ inputs.target_repo }}" --issue ${{ inputs.issue_number }} --with-llm
+          else
+            uv run seps execute --repo "${{ inputs.target_repo }}" --issue ${{ inputs.issue_number }}
+          fi

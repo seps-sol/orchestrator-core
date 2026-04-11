@@ -71,6 +71,11 @@ def gh_json(args: list[str], *, settings: Settings | None = None) -> Any:
     return json.loads(proc.stdout)
 
 
+def git_subprocess_env(settings: Settings | None) -> dict[str, str]:
+    """Environment for `git` / `gh` subprocesses (token + non-interactive CI flags)."""
+    return _env_for_gh(settings)
+
+
 def assert_gh_auth(settings: Settings | None) -> None:
     """Fail fast if gh is missing or not logged in (and no PAT in settings)."""
     if not gh_installed():

@@ -8,6 +8,8 @@ DIRECTIVE_KEYS = frozenset(
         "SEPS_TASK_TITLE",
         "SEPS_TASK_DETAIL",
         "SEPS_TASK_REPO",
+        "SEPS_EXECUTE",
+        "SEPS_EXECUTE_LLM",
     }
 )
 

@@ -1,14 +1,8 @@
 name: Orchestrator tick
 
+# Manual Actions only (no `repository_dispatch`). Run from the Actions tab.
 on:
   workflow_dispatch:
-  # Optional: faster than hourly via external cron → repository_dispatch (orchestrator_tick).
-  # POST /repos/seps-sol/orchestrator-core/dispatches with event_type "orchestrator_tick" (repo-scoped PAT).
-  repository_dispatch:
-    types: [orchestrator_tick, seps_upstream]
-  schedule:
-    # Hourly at :00 UTC (use repository_dispatch above for sub-hourly ticks).
-    - cron: "0 * * * *"
 
 permissions:
   contents: read

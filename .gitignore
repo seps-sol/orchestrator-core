@@ -15,3 +15,5 @@ build/
 
 # Local mirror of all org repos (scripts/pull_org_repos.sh)
 .org-repos/
+
+.fastembed_cache/

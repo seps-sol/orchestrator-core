@@ -1,13 +1,9 @@
-# SEPS: self-run hourly + child LangGraph tick + cross-repo dispatches.
+# SEPS: child self-run (manual Actions only; no `repository_dispatch` in template).
 # Placeholders: __SEPS_DOWNSTREAM_JSON__, __SEPS_REUSABLE_ORCHESTRATE__ (filled by bootstrap).
 name: SEPS child self run
 
 on:
   workflow_dispatch:
-  repository_dispatch:
-    types: [seps_upstream]
-  schedule:
-    - cron: "0 * * * *"
 
 permissions:
   contents: read

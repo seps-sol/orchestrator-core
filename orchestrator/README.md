@@ -19,8 +19,8 @@ Humans may operate keys or watch demos, but the **primary users are autonomous a
 - **GitHub Organization**: e.g. [seps-sol](https://github.com/seps-sol)
 - **Central Orchestrator Repo**: `orchestrator-core`
   - LangGraph loop + **OpenAI `gpt-5.4`** (or Anthropic if configured) for planning.
-  - **GitHub + `gh`**: repos, issues (`seps:task` for fundable tasks; **`seps:memory` for orchestrator durable memory** — each tick is an issue with observation/plan/action/errors), PRs, Actions. **Parent (`orchestrator-core`)** runs the full graph including **`gh repo create`**. **Each child** runs **`seps once`** via reusable **`seps-child-orchestrate.yml`** with **`SEPS_CHILD_TICK_ONLY`**: it **writes `seps:memory` / reads tasks in that child repo** but **does not** create sibling org repos. Children still get **`.github/workflows/seps-self-run.yml`** (schedule + **`seps_upstream`**) and **`ci_triggers.json`** cross-dispatches.
-  - Cron / schedule: observe org + task board → plan next protocol or ops step → act.
+  - **GitHub + `gh`**: repos, issues (`seps:task` for fundable tasks; **`seps:memory` for orchestrator durable memory** — each tick is an issue with observation/plan/action/errors), PRs, Actions. **Parent (`orchestrator-core`)** runs the full graph including **`gh repo create`**. **Each child** runs **`seps once`** via reusable **`seps-child-orchestrate.yml`** with **`SEPS_CHILD_TICK_ONLY`**: it **writes `seps:memory` / reads tasks in that child repo** but **does not** create sibling org repos. Children still get **`.github/workflows/seps-self-run.yml`** (currently **`workflow_dispatch` only** in the template) and **`ci_triggers.json`** for optional downstream dispatches when you run a workflow manually.
+  - **Manual runs:** observe org + task board → plan next protocol or ops step → act (trigger from Actions or `uv run seps once` locally).
 - **Child Repos** (indicative):
   - `agent-marketplace`: escrow, stakes, bid commitment, winner payout, optional identity bindings
   - `protocol-core`: core protocol logic if split from marketplace
@@ -60,7 +60,7 @@ Observe (org repos, `seps:task` issues, CI signals) → Plan (LLM) → Act (crea
 
 #### 7. Demo Flow (Hackathon)
 
-1. Show org + orchestrator running on a schedule.  
+1. Show org + orchestrator (manual Actions run or local `seps once`).  
 2. Open a **`seps:task`** issue representing an agent-funded job.  
 3. Show (simulated or live) **multiple bids** and **one winner**.  
 4. Show **SOL movement** on testnet and a **deliverable** (PR) tied to sponsor agents.  

@@ -33,7 +33,7 @@ def render_child_workflow(
 
 
 def bootstrap_child_workflows(settings: Settings, *, dry_run: bool = False) -> list[str]:
-    """Ensure every repo in child_repos.json has the hourly self-run workflow."""
+    """Ensure every repo in child_repos.json has the self-run workflow (manual dispatch only)."""
     client = OrgClient(settings)
     specs = load_child_repo_spec(settings.repo_root)
     triggers = load_ci_triggers(settings.repo_root)

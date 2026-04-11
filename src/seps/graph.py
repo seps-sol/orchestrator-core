@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
 from seps.config import Settings
+from seps.execute_task import run_execute_issue
 from seps.gh_cli import GhError
 from seps.github_client import OrgClient, load_child_repo_spec
 from seps.issue_memory import format_memory_body, tick_title
@@ -22,9 +24,22 @@ SEPS_OPEN_TASK: no | yes
 SEPS_TASK_TITLE: NONE | <short imperative title>
 SEPS_TASK_DETAIL: NONE | <one line acceptance criteria / definition of done>
 SEPS_TASK_REPO: NONE | <repo_name>  (GitHub repo for the new issue; NONE = default task board from environment)
+SEPS_EXECUTE: no | yes  (only after SEPS_OPEN_TASK: yes — opens a draft PR with a handoff doc on the task repo)
+SEPS_EXECUTE_LLM: no | yes  (optional outline in the handoff doc; uses API spend)
 
-Rules: Use SEPS_OPEN_TASK: yes only for a single shippable slice that fits roughly one PR. Use NONE for unused fields. In child mode, NEXT_REPO must be NONE and SEPS_TASK_REPO must be NONE (tasks open only on this repository).
+Rules: Use SEPS_OPEN_TASK: yes only for a single shippable slice that fits roughly one PR. Use SEPS_EXECUTE: yes sparingly (token must allow push + pull-requests on the task repo). Use NONE for unused fields. In child mode, NEXT_REPO must be NONE and SEPS_TASK_REPO must be NONE (tasks open only on this repository).
 """.strip()
+
+
+@dataclass
+class SteeredTaskOutcome:
+    message: str
+    issue_number: int | None = None
+    task_repo: str | None = None
+
+
+def _truthy_directive(value: str | None) -> bool:
+    return (value or "").strip().lower() in ("yes", "y", "true", "1")
 
 
 def _next_repo_name(plan_text: str, directives: dict[str, str]) -> str | None:
@@ -46,7 +61,7 @@ def _allowed_task_repo_names(settings: Settings, specs: list[dict[str, Any]]) ->
     return names
 
 
-def _steered_task_message(
+def _run_steered_task(
     *,
     org_client: OrgClient | None,
     settings: Settings,
@@ -54,18 +69,19 @@ def _steered_task_message(
     dry_run: bool,
     specs: list[dict[str, Any]],
     child: bool,
-) -> str:
-    """Create optional `seps:task` from planner directives; return human-readable result or ""."""
+) -> SteeredTaskOutcome:
+    """Create optional `seps:task` from planner directives."""
     if not org_client:
-        return ""
+        return SteeredTaskOutcome("")
 
-    open_raw = directives.get("SEPS_OPEN_TASK", "").strip().lower()
-    if open_raw not in ("yes", "y", "true", "1"):
-        return ""
+    if not _truthy_directive(directives.get("SEPS_OPEN_TASK")):
+        return SteeredTaskOutcome("")
 
     title = directives.get("SEPS_TASK_TITLE", "").strip()
     if not title or title.upper() == "NONE":
-        return "SEPS_OPEN_TASK yes but missing SEPS_TASK_TITLE; skipped task create."
+        return SteeredTaskOutcome(
+            "SEPS_OPEN_TASK yes but missing SEPS_TASK_TITLE; skipped task create."
+        )
 
     detail = directives.get("SEPS_TASK_DETAIL", "").strip()
     if detail.upper() == "NONE":
@@ -88,7 +104,7 @@ def _steered_task_message(
         elif tr in allowed:
             task_repo = tr
         else:
-            return (
+            return SteeredTaskOutcome(
                 f"Invalid SEPS_TASK_REPO {tr!r} (allowed: {', '.join(sorted(allowed))}); "
                 "skipped task create."
             )
@@ -97,7 +113,7 @@ def _steered_task_message(
         notes.append(
             f"Open task already exists with title {title!r} on {task_repo}; skipped."
         )
-        return " ".join(notes) if notes else ""
+        return SteeredTaskOutcome(" ".join(notes) if notes else "")
 
     body = "## Steered task (orchestrator tick)\n\n"
     if detail:
@@ -105,13 +121,15 @@ def _steered_task_message(
     body += "_Created from planner directives (`SEPS_OPEN_TASK: yes`). Close when done._\n"
 
     try:
-        msg = org_client.create_task_issue(task_repo, title, body, dry_run=dry_run)
+        msg, issue_num = org_client.create_task_issue(
+            task_repo, title, body, dry_run=dry_run
+        )
     except GhError as exc:
-        return f"Task create failed: {exc}"
+        return SteeredTaskOutcome(f"Task create failed: {exc}")
 
     if notes:
-        return f"{' '.join(notes)} {msg}".strip()
-    return msg
+        msg = f"{' '.join(notes)} {msg}".strip()
+    return SteeredTaskOutcome(msg, issue_num, task_repo)
 
 
 def build_graph(settings: Settings) -> StateGraph:
@@ -223,7 +241,9 @@ def build_graph(settings: Settings) -> StateGraph:
                         "SEPS_OPEN_TASK: no\n"
                         "SEPS_TASK_TITLE: NONE\n"
                         "SEPS_TASK_DETAIL: NONE\n"
-                        "SEPS_TASK_REPO: NONE"
+                        "SEPS_TASK_REPO: NONE\n"
+                        "SEPS_EXECUTE: no\n"
+                        "SEPS_EXECUTE_LLM: no"
                     )
                 }
             sys = SystemMessage(
@@ -258,7 +278,9 @@ def build_graph(settings: Settings) -> StateGraph:
                 "SEPS_OPEN_TASK: no\n"
                 "SEPS_TASK_TITLE: NONE\n"
                 "SEPS_TASK_DETAIL: NONE\n"
-                "SEPS_TASK_REPO: NONE"
+                "SEPS_TASK_REPO: NONE\n"
+                "SEPS_EXECUTE: no\n"
+                "SEPS_EXECUTE_LLM: no"
             )
             return {"plan": plan_text}
 
@@ -307,7 +329,7 @@ def build_graph(settings: Settings) -> StateGraph:
                         f"Would ensure repo {repo_name} but gh is not available or not logged in."
                     )
                     err = state.get("errors", []) + ["missing_gh_auth"]
-                    task_msg = _steered_task_message(
+                    task_out = _run_steered_task(
                         org_client=None,
                         settings=settings,
                         directives=directives,
@@ -315,8 +337,8 @@ def build_graph(settings: Settings) -> StateGraph:
                         specs=specs,
                         child=False,
                     )
-                    if task_msg:
-                        parts.append(task_msg)
+                    if task_out.message:
+                        parts.append(task_out.message)
                     return {"action_taken": " ".join(parts), "errors": err}
                 msg = org_client.ensure_repo_exists(
                     repo_name, description, dry_run=state["dry_run"]
@@ -325,7 +347,7 @@ def build_graph(settings: Settings) -> StateGraph:
             else:
                 parts.append("No NEXT_REPO in plan; no repo create.")
 
-        task_msg = _steered_task_message(
+        task_out = _run_steered_task(
             org_client=org_client,
             settings=settings,
             directives=directives,
@@ -333,8 +355,35 @@ def build_graph(settings: Settings) -> StateGraph:
             specs=specs,
             child=child,
         )
-        if task_msg:
-            parts.append(task_msg)
+        if task_out.message:
+            parts.append(task_out.message)
+
+        if (
+            org_client
+            and _truthy_directive(directives.get("SEPS_EXECUTE"))
+            and task_out.issue_number is not None
+            and task_out.task_repo
+        ):
+            if state["dry_run"]:
+                parts.append(
+                    "[dry-run] would run seps execute "
+                    f"--repo {task_out.task_repo} --issue {task_out.issue_number}"
+                )
+            else:
+                try:
+                    parts.append(
+                        run_execute_issue(
+                            settings,
+                            task_out.task_repo,
+                            task_out.issue_number,
+                            dry_run=False,
+                            with_llm=_truthy_directive(
+                                directives.get("SEPS_EXECUTE_LLM")
+                            ),
+                        )
+                    )
+                except GhError as exc:
+                    parts.append(f"Execute failed: {exc}")
 
         return {"action_taken": " ".join(parts)}
 
